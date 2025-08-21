@@ -56,14 +56,23 @@ async function startServer() {
         await Database.initDatabase();
         console.log('Database initialized successfully');
         
-        app.listen(PORT, () => {
-            console.log(`Server is running on http://localhost:${PORT}`);
-            console.log('Default login: username=admin, password=admin123');
-        });
+        // Only start server if not in Vercel environment
+        if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+            app.listen(PORT, () => {
+                console.log(`Server is running on http://localhost:${PORT}`);
+                console.log('Default login: username=admin, password=admin123');
+            });
+        }
     } catch (error) {
         console.error('Failed to start server:', error);
-        process.exit(1);
+        if (process.env.NODE_ENV !== 'production') {
+            process.exit(1);
+        }
     }
 }
 
+// Initialize database on startup
 startServer();
+
+// Export the Express app for Vercel
+module.exports = app;
