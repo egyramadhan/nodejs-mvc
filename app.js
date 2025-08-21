@@ -7,7 +7,7 @@ const webRoutes = require('./routes/web');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
+const isVercel = !!process.env.VERCEL;
 
 // View engine setup
 app.set('view engine', 'ejs');
@@ -26,7 +26,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: isVercel, // Set to true if using HTTPS
+        secure: false, // Disabled for local development - enable only with HTTPS in production
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
