@@ -21,11 +21,11 @@ app.use(bodyParser.json());
 
 // Session middleware
 app.use(session({
-    secret: 'hashmicro-secret-key-2024',
+    secret: process.env.SESSION_SECRET || 'hashmicro-secret-key-2024',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true if using HTTPS
+        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
