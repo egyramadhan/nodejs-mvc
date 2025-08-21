@@ -7,6 +7,7 @@ const webRoutes = require('./routes/web');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
 
 // View engine setup
 app.set('view engine', 'ejs');
@@ -21,11 +22,11 @@ app.use(bodyParser.json());
 
 // Session middleware
 app.use(session({
-    secret: 'hashmicro-secret-key-2024',
+    secret: process.env.SESSION_SECRET || 'hashmicro-secret-key-2024',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true if using HTTPS
+        secure: isVercel, // Set to true if using HTTPS
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
@@ -53,17 +54,72 @@ app.use((req, res) => {
 // Initialize database and start server
 async function startServer() {
     try {
-        await Database.initDatabase();
-        console.log('Database initialized successfully');
+        console.log('Environment:', process.env.NODE_ENV);
+        console.log('Vercel deployment:', !!isVercel);
         
-        app.listen(PORT, () => {
-            console.log(`Server is running on http://localhost:${PORT}`);
-            console.log('Default login: username=admin, password=admin123');
-        });
+        if (!isVercel) {
+            await Database.initDatabase();
+            console.log('Database initialized successfully');
+        } else {
+            console.log('Skipping database initialization in Vercel environment');
+        }
+        
+        if (!isVercel) {
+            app.listen(PORT, () => {
+                console.log(`Server is running on http://localhost:${PORT}`);
+                console.log('Default login: username=admin, password=admin123');
+            });
+        }
     } catch (error) {
         console.error('Failed to start server:', error);
-        process.exit(1);
+        if (!isVercel) {
+            process.exit(1);
+        }
     }
 }
 
+// Initialize database with lazy loading for Vercel
+let dbInitialized = false;
+async function ensureDatabase() {
+    if (!dbInitialized && isVercel) {
+        try {
+            await Database.initDatabase();
+            dbInitialized = true;
+            console.log('Database initialized lazily');
+        } catch (error) {
+            console.error('Database initialization failed:', error);
+            throw error;
+        }
+    }
+}
+
+// Add middleware to ensure database is initialized for each request in Vercel
+if (isVercel) {
+    app.use(async (req, res, next) => {
+        try {
+            await ensureDatabase();
+            next();
+        } catch (error) {
+            console.error('Database initialization error:', error);
+            res.status(500).render('error', { 
+                message: 'Database connection failed',
+                error: process.env.NODE_ENV === 'development' ? error : {}
+            });
+        }
+    });
+}
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        vercel: !!isVercel
+    });
+});
+
 startServer();
+
+// Export for Vercel
+module.exports = app;
