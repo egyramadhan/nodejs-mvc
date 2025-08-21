@@ -33,6 +33,16 @@ app.use(session({
 // Routes
 app.use('/', webRoutes);
 
+// Health check route (no database dependency)
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        vercel: !!process.env.VERCEL
+    });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error(err.stack);
@@ -55,24 +65,42 @@ async function startServer() {
     try {
         await Database.initDatabase();
         console.log('Database initialized successfully');
-        
-        // Only start server if not in Vercel environment
-        if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
-            app.listen(PORT, () => {
-                console.log(`Server is running on http://localhost:${PORT}`);
-                console.log('Default login: username=admin, password=admin123');
-            });
-        }
     } catch (error) {
-        console.error('Failed to start server:', error);
+        console.error('Database initialization failed:', error);
+        // Don't exit in production, let the app continue without database
         if (process.env.NODE_ENV !== 'production') {
             process.exit(1);
         }
     }
+    
+    // Only start server if not in Vercel environment
+    if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+        app.listen(PORT, () => {
+            console.log(`Server is running on http://localhost:${PORT}`);
+            console.log('Default login: username=admin, password=admin123');
+        });
+    }
 }
 
-// Initialize database on startup
-startServer();
+// Add debugging for Vercel
+console.log('App starting...', {
+    NODE_ENV: process.env.NODE_ENV,
+    VERCEL: process.env.VERCEL,
+    DB_HOST: process.env.DB_HOST ? 'Set' : 'Not set'
+});
+
+// Initialize database on startup (non-blocking for Vercel)
+if (process.env.VERCEL) {
+    console.log('Running in Vercel environment');
+    // In Vercel, initialize database lazily
+    Database.initDatabase().catch(err => {
+        console.error('Database initialization failed in Vercel:', err);
+    });
+} else {
+    console.log('Running in local environment');
+    // In local development, wait for database initialization
+    startServer();
+}
 
 // Export the Express app for Vercel
 module.exports = app;
